@@ -9,8 +9,8 @@ import (
 	"sync"
 )
 
-const TEXT_COLLUMN int = 5
-const LINK_COLLUMN int = 3
+const TEXT_COLLUMN int = 3
+const LINK_COLLUMN int = 1
 
 type TF = map[string]int
 
