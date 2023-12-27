@@ -1,19 +1,33 @@
 package database
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
+	"recomendder-go/calc"
 
-	_ "github.com/mattn/go-sqlite3"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type DB struct {
-	Conn *sql.DB
+	Conn *gorm.DB
 }
 
-func NewDb(path string) *DB{
-	db, err := sql.Open("sqlite3", path)
+type Document struct {
+	ID uint
+	Content string
+	Title string
+}
+
+type TermFreq struct {
+	ID uint
+	DocumentId uint
+	Term string
+	Tf float64
+}
+
+func NewDb(path string) *DB {
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default})
 	if err != nil {
 		log.Fatalf("Cannot create sqlite 3 connection %s", err.Error())
 	}
@@ -23,30 +37,43 @@ func NewDb(path string) *DB{
 }
 
 func (db *DB) Table() {
-	sqlstmt := createTable("documents", "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, content TEXT, title TEXT")
+	db.Conn.AutoMigrate(&Document{}, &TermFreq{})
+}
 
-	_, err := db.Conn.Exec(sqlstmt)
+func (db *DB) InsertDocument(content string, title string, termFreq map[string]uint, freqTotal uint) {
 	
-	handleErr(err, sqlstmt)
+	// sqlStmt := insertTable(documentTable, "content, title")
+	// result, err := db.Conn.Exec(sqlStmt)
 
-	sqlstmt = createTable("termfreq", `id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, 
-										document_id INTEGER NOT NULL, 
-										term TEXT, 
-										freq INTEGER,
-										FOREIGN KEY (document_id) REFERENCES documents(id)
-										`)
+	// handleErr(err, sqlStmt)
 
-	_, err = db.Conn.Exec(sqlstmt)
+	// id, err := result.LastInsertId()
 
-	handleErr(err, sqlstmt)
-}
-
-func handleErr(err error, query string){
-	if err != nil {
-		log.Fatalf("Error: %s, query : %s",err, query )
+	// handleErr(err, "Gagal mengambil id")
+	document := &Document{
+		Content: content,
+		Title: title,
 	}
+	db.Conn.Create(document)
+
+	insertValue := make([]*TermFreq, 0)
+
+	for term, freq := range termFreq {
+		tf := calc.CalcTf(freq, freqTotal)
+		insertValue = append(insertValue, &TermFreq{
+			Term: term,
+			Tf: tf,
+			DocumentId: document.ID,
+		})
+	}
+
+	db.Conn.CreateInBatches(insertValue, len(insertValue))
+
+
 }
 
-func createTable(tableName string, strucutre string) string {
-	return fmt.Sprintf("CREATE TABLE %s (%s)", tableName, strucutre)
+
+func (db *DB) GetTotalDocument(term string){
+
 }
+

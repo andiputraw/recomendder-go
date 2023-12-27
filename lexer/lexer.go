@@ -12,9 +12,9 @@ type Lexer struct {
 }
 
 func NewLexer(str string) Lexer {
-	char :=  []rune(str)
+	char := []rune(str)
 	return Lexer{
-		char:  char,
+		char:   char,
 		Length: len(char),
 		cursor: 0,
 	}
@@ -22,10 +22,10 @@ func NewLexer(str string) Lexer {
 
 func (l *Lexer) trim() {
 	char := l.char[l.cursor]
-	
-	for((!unicode.IsLetter(char) && !unicode.IsDigit(char))){
+
+	for !unicode.IsLetter(char) && !unicode.IsDigit(char) {
 		l.cursor++
-		if(l.cursor >= l.Length - 1){
+		if l.cursor >= l.Length-1 {
 			break
 		}
 		char = l.char[l.cursor]
@@ -34,10 +34,10 @@ func (l *Lexer) trim() {
 
 func (l *Lexer) chop() {
 	char := l.char[l.cursor]
-	for((!unicode.IsSpace(char) && !unicode.IsPunct(char))){
-		
+	for !unicode.IsSpace(char) && !unicode.IsPunct(char) {
+
 		l.cursor++
-		if( l.cursor >= l.Length - 1){
+		if l.cursor >= l.Length-1 {
 			break
 		}
 		char = l.char[l.cursor]
@@ -45,7 +45,7 @@ func (l *Lexer) chop() {
 }
 
 func (l *Lexer) Get() (string, bool) {
-	if l.cursor >= l.Length - 1 {
+	if l.cursor >= l.Length-1 {
 		return "", true
 	}
 	l.trim()

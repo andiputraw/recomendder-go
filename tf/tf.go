@@ -5,23 +5,24 @@ import (
 	"errors"
 	"io"
 	"log"
+
+	"recomendder-go/database"
 	"recomendder-go/lexer"
 	"sync"
 )
 
-const TEXT_COLLUMN int = 3
-const LINK_COLLUMN int = 1
+const TEXT_COLLUMN int = 5
+const LINK_COLLUMN int = 3
 
-type TF = map[string]int
+type TF = map[string]uint
 
 type Doc struct {
-	Name string
-	Tf   TF
-	Total int
+	Name  string
+	Tf    TF
+	Total uint
 }
 
-
-func newDoc(name string, tf TF, total int) *Doc {
+func newDoc(name string, tf TF, total uint) *Doc {
 	return &Doc{
 		name,
 		tf,
@@ -29,7 +30,7 @@ func newDoc(name string, tf TF, total int) *Doc {
 	}
 }
 
-func getTf(str string) (TF, int) {
+func getTf(str string) (TF, uint) {
 	tf := make(TF, 0)
 	lex := lexer.NewLexer(str)
 	term, end := lex.Get()
@@ -42,12 +43,12 @@ func getTf(str string) (TF, int) {
 		tf[term] = count + 1
 		term, end = lex.Get()
 	}
-	return tf, lex.Length
+	return tf, uint(lex.Length)
 }
 
-func DocFromCsvMultithread(reader *csv.Reader, workerNum int) []*Doc{
+func DocFromCsvMultithread(reader *csv.Reader, workerNum int) []*Doc {
 	var wg sync.WaitGroup
-	
+
 	jobs := make(chan []string, workerNum)
 	result := make(chan *Doc, workerNum)
 
@@ -58,9 +59,9 @@ func DocFromCsvMultithread(reader *csv.Reader, workerNum int) []*Doc{
 
 	go func() {
 		for {
-			record , err := reader.Read()
+			record, err := reader.Read()
 			if err != nil {
-				if errors.Is(err, io.EOF){	
+				if errors.Is(err, io.EOF) {
 					close(jobs)
 					return
 				}
@@ -70,7 +71,7 @@ func DocFromCsvMultithread(reader *csv.Reader, workerNum int) []*Doc{
 		}
 	}()
 
-	go func(){
+	go func() {
 		wg.Wait()
 		close(result)
 	}()
@@ -81,20 +82,19 @@ func DocFromCsvMultithread(reader *csv.Reader, workerNum int) []*Doc{
 		docs = append(docs, result)
 	}
 
-
 	return docs
 }
 
-func processCsv(jobs <-chan []string, result chan<- *Doc, wg *sync.WaitGroup){
+func processCsv(jobs <-chan []string, result chan<- *Doc, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for record := range jobs {
 		name := record[LINK_COLLUMN]
 		text := record[TEXT_COLLUMN]
 		doc := DocFromString(name, text)
 		log.Printf("Completed processing %s\n", name)
-		result<-doc
+		result <- doc
 	}
-	
+
 }
 
 func DocFromCsv(reader *csv.Reader) []*Doc {
@@ -102,7 +102,7 @@ func DocFromCsv(reader *csv.Reader) []*Doc {
 	if err != nil {
 		log.Fatalf("Cannot read csv Headers: %s", err.Error())
 	}
-	
+
 	record, err := reader.Read()
 
 	if err != nil {
@@ -117,13 +117,14 @@ func DocFromCsv(reader *csv.Reader) []*Doc {
 		text := record[TEXT_COLLUMN]
 		link := record[LINK_COLLUMN]
 		tf, length := getTf(text)
-		doc := newDoc(link, tf, length)
+		doc := newDoc(link, tf, uint(length))
 		docs = append(docs, doc)
 		record, err = reader.Read()
 		if err != nil {
 			break
 		}
 		log.Printf("Completed indexing %s..\n", record[LINK_COLLUMN])
+		
 	}
 	return docs
 }
@@ -131,4 +132,36 @@ func DocFromCsv(reader *csv.Reader) []*Doc {
 func DocFromString(name, str string) *Doc {
 	tf, total := getTf(str)
 	return newDoc(name, tf, total)
+}
+
+// It may panic
+func DocFromCsvToDb(reader *csv.Reader, db *database.DB){
+	_, err := reader.Read()
+	if err != nil {
+		log.Fatalf("Cannot read csv Headers: %s", err.Error())
+	}
+
+	record, err := reader.Read()
+
+	if err != nil {
+		log.Fatalf("Cannot read csv: %s", err.Error())
+	}
+
+	for record != nil {
+		if len(record) < TEXT_COLLUMN {
+			log.Fatalf("Collumn length is less that TEXT_COLLUMN")
+		}
+		text := record[TEXT_COLLUMN]
+		link := record[LINK_COLLUMN]
+		tf, length := getTf(text)
+		doc := newDoc(link, tf, length)
+		db.InsertDocument(text, doc.Name, doc.Tf, doc.Total)
+		record, err = reader.Read()
+		if err != nil {
+			break
+		}
+		log.Printf("Completed indexing %s..\n", record[LINK_COLLUMN])
+			
+	}
+	
 }
